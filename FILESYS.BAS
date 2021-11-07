@@ -25,6 +25,7 @@ END TYPE
 DECLARE FUNCTION CurDir$ ()
 DECLARE FUNCTION CurDrive$ ()
 DECLARE FUNCTION DriveCount ()
+DECLARE FUNCTION FileExists (FileName$)
 DECLARE SUB Dir (Pattern$, Attributes, DTA AS DTAStr)
 DECLARE SUB INTERRUPTX (intnum AS INTEGER, inreg AS RegTypeX, outreg AS RegTypeX)
 DECLARE SUB ListDirectory (Pattern$, Attributes)
@@ -87,6 +88,27 @@ DIM Registers AS RegTypeX
  INTERRUPTX &H21, Registers, Registers
 
  DriveCount = Registers.AX AND &HFF
+END FUNCTION
+
+FUNCTION FileExists (FileName$)
+DIM DTA AS DTAStr
+DIM Registers AS RegTypeX
+
+ Registers.AX = &H1A00
+ Registers.DX = VARPTR(DTA)
+ Registers.DS = VARSEG(DTA)
+ INTERRUPTX &H21, Registers, Registers
+
+ Attributes = 0
+ Pattern$ = FileName$ + CHR$(0)
+
+ Registers.AX = &H4E00
+ Registers.CX = Attributes
+ Registers.DX = SADD(Pattern$)
+ Registers.DS = VARSEG(Pattern$)
+ INTERRUPTX &H21, Registers, Registers
+
+ FileExists = (INSTR(DTA.FileName, CHR$(0)) > 1)
 END FUNCTION
 
 SUB ListDirectory (Pattern$, Attributes)
