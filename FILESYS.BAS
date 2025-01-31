@@ -1,3 +1,4 @@
+'$DYNAMIC
 DEFINT A-Z
 
 TYPE DTAStr
@@ -11,41 +12,48 @@ END TYPE
 
 TYPE RegTypeX
  AX AS INTEGER
- bx AS INTEGER
+ BX AS INTEGER
  CX AS INTEGER
  DX AS INTEGER
- bp AS INTEGER
- si AS INTEGER
- di AS INTEGER
+ BP AS INTEGER
+ SI AS INTEGER
+ DI AS INTEGER
  Flags AS INTEGER
  DS AS INTEGER
- es AS INTEGER
+ ES AS INTEGER
 END TYPE
 
 DECLARE FUNCTION CurDir$ ()
 DECLARE FUNCTION CurDrive$ ()
 DECLARE FUNCTION DriveCount ()
-DECLARE FUNCTION FileExists (FileName$)
-DECLARE SUB Dir (Pattern$, Attributes, DTA AS DTAStr)
+DECLARE FUNCTION FileExists (FileName AS STRING)
+DECLARE SUB Dir (Pattern AS STRING, Attributes AS INTEGER, DTA AS DTAStr)
+DECLARE SUB GetDirectory (Pattern AS STRING, Attributes AS INTEGER, FileNames() AS STRING)
 DECLARE SUB INTERRUPTX (intnum AS INTEGER, inreg AS RegTypeX, outreg AS RegTypeX)
-DECLARE SUB ListDirectory (Pattern$, Attributes)
-DECLARE SUB SetDrive (Drive$)
+DECLARE SUB SetDrive (Drive AS STRING)
 
-CLS
-PRINT CurDir$
-ListDirectory "*.*", 255
+DIM FileNames(0 TO 0) AS STRING
 
+ CLS
+ PRINT CurDir$
+ GetDirectory "*.*", 255, FileNames()
+ FOR Index = LBOUND(FileNames) TO UBOUND(FileNames)
+  PRINT FileNames(Index)
+ NEXT Index
+END
+
+REM $STATIC
 FUNCTION CurDir$
-DIM Buffer$
+DIM Buffer AS STRING
 DIM Registers AS RegTypeX
 
- Buffer$ = STRING$(&H40, " ")
+ Buffer = STRING$(&H40, " ")
  Registers.AX = &H4700
  Registers.DX = &H0
- Registers.DS = VARSEG(Buffer$)
- Registers.si = SADD(Buffer$)
+ Registers.DS = VARSEG(Buffer)
+ Registers.SI = SADD(Buffer)
  INTERRUPTX &H21, Registers, Registers
- CurDir$ = CurDrive$ + ":\" + RTRIM$(Buffer$)
+ CurDir$ = CurDrive$ + ":\" + RTRIM$(Buffer)
 END FUNCTION
 
 FUNCTION CurDrive$
@@ -57,7 +65,7 @@ DIM Registers AS RegTypeX
  CurDrive$ = CHR$((Registers.AX AND &HFF) + &H41)
 END FUNCTION
 
-SUB Dir (Pattern$, Attributes, DTA AS DTAStr)
+SUB Dir (Pattern AS STRING, Attributes AS INTEGER, DTA AS DTAStr)
 DIM Registers AS RegTypeX
 
  IF Pattern$ = "" THEN
@@ -70,7 +78,7 @@ DIM Registers AS RegTypeX
   INTERRUPTX &H21, Registers, Registers
 
   Attributes = 0
-  Pattern$ = "*.*" + CHR$(0)
+  Pattern = Pattern + CHR$(0)
 
   Registers.AX = &H4E00
   Registers.CX = Attributes
@@ -90,8 +98,9 @@ DIM Registers AS RegTypeX
  DriveCount = Registers.AX AND &HFF
 END FUNCTION
 
-FUNCTION FileExists (FileName$)
+FUNCTION FileExists (FileName AS STRING)
 DIM DTA AS DTAStr
+DIM Pattern AS STRING
 DIM Registers AS RegTypeX
 
  Registers.AX = &H1A00
@@ -100,7 +109,7 @@ DIM Registers AS RegTypeX
  INTERRUPTX &H21, Registers, Registers
 
  Attributes = 0
- Pattern$ = FileName$ + CHR$(0)
+ Pattern = FileName + CHR$(0)
 
  Registers.AX = &H4E00
  Registers.CX = Attributes
@@ -111,25 +120,38 @@ DIM Registers AS RegTypeX
  FileExists = (INSTR(DTA.FileName, CHR$(0)) > 1)
 END FUNCTION
 
-SUB ListDirectory (Pattern$, Attributes)
+SUB GetDirectory (Pattern AS STRING, Attributes AS INTEGER, FileNames() AS STRING)
+DIM Count AS INTEGER
 DIM DTA AS DTAStr
+DIM FileName AS STRING
+DIM PreviousName AS STRING
 
- Dir Pattern$, Attributes, DTA
+ Count = 0
+ Dir Pattern, Attributes, DTA
  DO
-  PreviousName$ = FileName$
-  PRINT FileName$
-  FileName$ = DTA.FileName
-  FileName$ = LEFT$(FileName$, INSTR(FileName$, CHR$(&H0)) - 1)
+  PreviousName = FileName
+  Count = Count + 1
+  FileName = LEFT$(DTA.FileName, INSTR(DTA.FileName, CHR$(&H0)) - 1)
   Dir "", 0, DTA
-  IF FileName$ = PreviousName$ THEN EXIT DO
- LOOP
+ LOOP UNTIL FileName = PreviousName
+
+ REDIM FileNames(0 TO Count - 1) AS STRING
+ Index = 0
+ Dir Pattern, Attributes, DTA
+ DO
+  PreviousName = FileName
+  FileName = LEFT$(DTA.FileName, INSTR(DTA.FileName, CHR$(&H0)) - 1)
+  FileNames(Index) = FileName
+  Index = Index + 1
+  Dir "", 0, DTA
+ LOOP UNTIL FileName = PreviousName
 END SUB
 
-SUB SetDrive (Drive$)
+SUB SetDrive (Drive AS STRING)
 DIM Registers AS RegTypeX
 
  Registers.AX = &HE00
- Registers.DX = ASC(Drive$) - &H41
+ Registers.DX = ASC(Drive) - &H41
  INTERRUPTX &H21, Registers, Registers
 END SUB
 
